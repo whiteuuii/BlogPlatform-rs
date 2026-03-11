@@ -35,7 +35,10 @@ async fn main() -> Result<(), sqlx::Error> {
 }
 
 async fn get_post(State(db): State<Arc<AppState>>, uri: Uri) -> impl IntoResponse {
-    let id = id_from_uri(uri).expect("Invalid request ID");
+    let id = match uri.path().split('/').last().unwrap().parse::<i32>() {
+        Ok(id) => id,
+        Err(_) => return (StatusCode::BAD_REQUEST,Json(json!({"error":"invalid post ID"}))).into_response(),
+    };
 
     match db.read_post(id).await {
         Ok(post) => (StatusCode::OK, Json(json!(post))).into_response(),
@@ -73,7 +76,10 @@ async fn put_post(
 }
 
 async fn delete_post(State(db): State<Arc<AppState>>, uri: Uri) -> impl IntoResponse {
-    let id = id_from_uri(uri).expect("Invalid request ID");
+    let id = match uri.path().split('/').last().unwrap().parse::<i32>() {
+        Ok(id) => id,
+        Err(_) => return (StatusCode::BAD_REQUEST,Json(json!({"error":"invalid post ID"}))).into_response(),
+    };
 
     match db.delete_post(id).await {
         Ok(_) => StatusCode::OK.into_response(),
@@ -90,7 +96,10 @@ async fn update_post(
     uri: Uri,
     Json(updated_post): Json<RawPost>,
 ) -> impl IntoResponse {
-    let id = id_from_uri(uri).expect("Invalid request ID");
+    let id = match uri.path().split('/').last().unwrap().parse::<i32>() {
+        Ok(id) => id,
+        Err(_) => return (StatusCode::BAD_REQUEST,Json(json!({"error":"invalid post ID"}))).into_response(),
+    };
 
     match db.update_post(id, updated_post).await {
         Ok(_) => StatusCode::OK.into_response(),
@@ -213,9 +222,3 @@ impl AppState {
     }
 }
 
-fn id_from_uri(uri: Uri) -> Result<i32, &'static str> {
-    match uri.path().split('/').last().unwrap().parse::<i32>() {
-        Ok(id) => Ok(id),
-        Err(_) => Err("invalid request ID"),
-    }
-}
