@@ -1,7 +1,3 @@
-mod db;
-
-#[allow(d)]
-
 use axum::extract::State;
 use axum::http::{StatusCode, Uri};
 use axum::response::IntoResponse;
@@ -131,20 +127,32 @@ struct AppState {
 
 impl AppState {
     async fn new(url: &'static str) -> Result<AppState, sqlx::Error> {
-        Ok(AppState {
-            pool: Arc::new(PgPoolOptions::new().max_connections(5).connect(url).await?),
-        })
+        let db = AppState {
+            pool: Arc::new(PgPoolOptions::new().max_connections(5).connect(url).await?)
+        };
+
+        sqlx::query(
+            "CREATE TABLE IF NOT EXISTS posts
+                (id SERIAL PRIMARY KEY,
+                post_title varchar(128) NOT NULL,
+                post_content TEXT NOT NULL,
+                post_category varchar(64) NOT NULL,
+                post_tags TEXT varchar(64)[] NOT NULL,
+                created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP)")
+            .execute(&mut *db.pool.acquire().await?).await?;
+
+        Ok(db)
     }
 
     async fn create_post(&self, new_post: RawPost) -> Result<Post, sqlx::Error> {
         let mut conn = self.pool.acquire().await?;
 
-        let post: Post= sqlx::query_as("INSERT INTO posts (post_title, post_content, post_category, post_tags, created_at, updated_at) values ($1, $2, $3, $4, $5, $6, $6)")
+        let post: Post= sqlx::query_as("INSERT INTO posts (post_title, post_content, post_category, post_tags) values ($1, $2, $3, $4, $5)")
             .bind(new_post.post_title)
             .bind(new_post.post_content)
             .bind(new_post.post_category)
             .bind(new_post.post_tags)
-            .bind(Utc::now())
             .fetch_one(&mut *conn).await?;
 
         Ok(post)
